@@ -1,0 +1,10 @@
+[project]
+name = "agentic-medical-insights"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "ipython>=9.13.0",
+    "langchain-openrouter>=0.2.3",
+    "langgraph>=1.1.10",
+    "python-dotenv>=1.2.2",
+]
