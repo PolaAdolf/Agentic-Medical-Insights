@@ -4,6 +4,9 @@ import operator
 from langchain_openrouter import ChatOpenRouter
 from dotenv import load_dotenv
 
+from IPython.display import Image, display
+from langgraph.checkpoint.memory import MemorySaver
+
 # from agents.ocr import ocr_node
 # from agents.extract import extraction_node
 # from agents.search import search_node
@@ -35,29 +38,29 @@ class AgentState(TypedDict):
 
 
 class MedicalInsightsPipeline:
-    def __init__(self, checkpointer):
-            # Initialize the Graph
-            workflow = StateGraph(AgentState)
+    def __init__(self, checkpointer=MemorySaver()):
+        # Initialize the Graph
+        workflow = StateGraph(AgentState)
 
-            # Add Nodes
-            # workflow.add_node("ocr", ocr_node)
-            # workflow.add_node("context_extraction", extraction_node)
-            # workflow.add_node("pubmed_search", search_node)
-            # workflow.add_node("results_analysis", analysis_node)
-            workflow.add_node("ocr", self.ocr_node)
-            workflow.add_node("context_extraction", self.extraction_node)
-            workflow.add_node("pubmed_search", self.search_node)
-            workflow.add_node("results_analysis", self.analysis_node)
+        # Add Nodes
+        # workflow.add_node("ocr", ocr_node)
+        # workflow.add_node("context_extraction", extraction_node)
+        # workflow.add_node("pubmed_search", search_node)
+        # workflow.add_node("results_analysis", analysis_node)
+        workflow.add_node("ocr", self.ocr_node)
+        workflow.add_node("context_extraction", self.extraction_node)
+        workflow.add_node("pubmed_search", self.search_node)
+        workflow.add_node("results_analysis", self.analysis_node)
 
-            # Define Edges (The Flow)
-            workflow.set_entry_point("ocr")
-            workflow.add_edge("ocr", "context_extraction")
-            workflow.add_edge("context_extraction", "pubmed_search")
-            # workflow.add_conditional_edges("context_extraction", self.is_valid_context, {True: "pubmed_search", False: "context_extraction"})
-            workflow.add_edge("pubmed_search", "results_analysis")
-            workflow.add_edge("results_analysis", END)
+        # Define Edges (The Flow)
+        workflow.set_entry_point("ocr")
+        workflow.add_edge("ocr", "context_extraction")
+        workflow.add_edge("context_extraction", "pubmed_search")
+        # workflow.add_conditional_edges("context_extraction", self.is_valid_context, {True: "pubmed_search", False: "context_extraction"})
+        workflow.add_edge("pubmed_search", "results_analysis")
+        workflow.add_edge("results_analysis", END)
 
-            workflow.compile(checkpointer=checkpointer)
+        self.graph = workflow.compile(checkpointer=checkpointer)
 
 
     async def ocr_node(self, state: AgentState):
@@ -71,3 +74,10 @@ class MedicalInsightsPipeline:
 
     async def analysis_node(self, state: AgentState):
         pass
+
+
+
+def visualize_graph():
+    pipeline = MedicalInsightsPipeline()
+
+    return pipeline.graph.get_graph().draw_mermaid_png()
