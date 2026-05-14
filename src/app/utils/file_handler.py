@@ -3,7 +3,7 @@ import io
 from pathlib import Path
 import numpy as np
 import easyocr
-import fitz
+import pymupdf
 import pytesseract
 from PIL import Image
 
@@ -27,7 +27,7 @@ def upscale_if_small(img: Image.Image, min_dim: int = 1500) -> Image.Image:
 
 def extract_pdf(pdf_bytes: bytes) -> str:
     """Extract text from PDF bytes, using OCR for pages with little text."""
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     pages: list[str] = []
     for page in doc:
         text = page.get_text("text").strip()
