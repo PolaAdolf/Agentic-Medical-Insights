@@ -17,6 +17,7 @@ Agentic-Medical-Insights/
 │   │   │   └── module5_evaluation.py
 │   │   └── pipeline.py         # Orchestration logic & workflow
 │   ├── utils/
+│   │   ├── file_handler.py     # 
 │   │   └── pubmed_api.py       # PubMed API wrapper & utilities
 │   └── ui/                     # Integrated frontend
 │       └── streamlit_app.py

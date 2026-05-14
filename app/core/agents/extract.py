@@ -2,6 +2,8 @@ import os
 import dspy
 from pydantic import BaseModel
 from typing import List, Dict, Any
+import json
+from sympy import re
 
 # =========================
 # SCHEMA (ONLY STRUCTURE)
@@ -12,6 +14,8 @@ class PersonalInfo(BaseModel):
     age: str = "Not found"
     gender: str = "Not found"
     report_date: str = "Not found"
+    lab_name: str = "Not found"
+    physician: str = "Not found"
 
 
 class MedicalMetric(BaseModel):
@@ -19,12 +23,15 @@ class MedicalMetric(BaseModel):
     value: str = "Not found"
     unit: str = "Not found"
     reference_range: str = "Not found"
+    flag: str = "Unknown"  # HIGH, LOW, NORMAL, UNKNOWN
+    category: str = ""  # e.g. CBC, Blood Test, Vitamin, etc.
 
 
 class ExtractedContext(BaseModel):
     report_category: str = "Unknown"
     personal_info: PersonalInfo
     metrics: List[MedicalMetric]
+    clinical_notes: list[str] 
     confidence: float = 0.0
 
 
@@ -42,7 +49,9 @@ STRICT RULES:
 - Extract ALL table rows
 """
 
-    markdown_text: str = dspy.InputField()
+    markdown_text: str = dspy.InputField(
+         desc="Structured Markdown lab report from OCR pipeline"
+    )
 
     report_category: str = dspy.OutputField(
         desc="One string like 'Blood Test Report', 'CBC', etc."
@@ -54,7 +63,9 @@ STRICT RULES:
   "patient_name": "...",
   "age": "...",
   "gender": "...",
-  "report_date": "..."
+  "report_date": "...",
+  "lab_name": "...",
+  "physician": "..."
 }"""
     )
 
@@ -65,7 +76,9 @@ STRICT RULES:
     "test_name": "Section - Test Name",
     "value": "...",
     "unit": "...",
-    "reference_range": "..."
+    "reference_range": "...",
+    "flag": "...",
+    "category": "..."
   }
 ]
 
@@ -73,6 +86,9 @@ Rules:
 - Include section name prefix (e.g. 'CBC - Hemoglobin')
 - Extract ALL rows from ALL tables
 """
+    )
+    clinical_notes: list = dspy.OutputField(
+        desc='JSON array of strings — physician remarks and interpretations. [] if none.'
     )
 
 
@@ -83,8 +99,31 @@ Rules:
 def safe_str(x):
     if x is None:
         return "Not found"
-    return str(x)
+    return str(x).strip() or "Not found"
 
+def safe_json(text: any, fallback: Any = {}) -> Any:
+    """Parse text as JSON, return empty dict on failure."""
+
+    if isinstance(text, (dict, list)):
+        return text
+    if not isinstance(text, str):
+        return fallback
+    
+    cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip())
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+    # Last resort: find first {...} or [...] block
+    m = re.search(r'(\{.*\}|\[.*\])', cleaned, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except json.JSONDecodeError:
+            pass
+ 
+    return fallback
 
 def clean_metric(m: dict) -> dict:
     return {
@@ -92,6 +131,8 @@ def clean_metric(m: dict) -> dict:
         "value": safe_str(m.get("value")),
         "unit": safe_str(m.get("unit")),
         "reference_range": safe_str(m.get("reference_range")),
+        "flag": safe_str(m.get("flag")),
+        "category": safe_str(m.get("category"))
     }
 
 
@@ -116,6 +157,74 @@ def compute_confidence(personal: dict, metrics: list) -> float:
 
     return round(filled / total, 2) if total else 0.0
 
+# =========================
+# Output formatting 
+# =========================
+def compress(full: dict) -> dict:
+    """
+    Token-optimised representation for passing to Modules 3 & 4.
+    Keeps ALL fields needed downstream (reference_range was missing before).
+    """
+    pi = full["personal_info"]
+    return {
+        "rc": full["report_category"],
+        "pi": {
+            "name":   pi["patient_name"],
+            "age":    pi["age"],
+            "gender": pi["gender"],
+        },
+        "data": [
+            {
+                "t":  m["test_name"],
+                "v":  m["value"],
+                "u":  m["unit"],
+                "rr": m["reference_range"],   
+                "f":  m["flag"],
+            }
+            for m in full["metrics"]
+        ],
+        "notes": full["clinical_notes"],
+        "c":    full["confidence"],
+    }
+
+
+def context_to_markdown(full: dict) -> str:
+    """Render extracted context as a clean Markdown summary."""
+    pi   = full.get("personal_info", {})
+    lv   = full.get("metrics", [])
+    rt   = full.get("report_category", "Unknown")
+    cn   = full.get("clinical_notes", [])
+    conf = full.get("confidence", 0.0)
+ 
+    lines = [f"# Extracted Context: {rt}\n"]
+ 
+    # Patient table
+    lines += ["## Patient Information\n", "| Field | Value |", "|-------|-------|"]
+    for key, val in pi.items():
+        lines.append(f"| {key.replace('_',' ').title()} | {val or 'N/A'} |")
+ 
+    # Lab results table
+    lines += [
+        "\n## Lab Results\n",
+        "| Test | Value | Unit | Reference Range | Flag |",
+        "|------|-------|------|-----------------|------|",
+    ]
+    FLAG_ICON = {"HIGH": "HIGH", "LOW": "LOW", "NORMAL": "NORMAL"}
+    for m in lv:
+        flag = FLAG_ICON.get(m.get("flag", ""), f"{m.get('flag','?')}")
+        lines.append(
+            f"| {m.get('test_name','')} | {m.get('value','')} | "
+            f"{m.get('unit','')} | {m.get('reference_range','')} | {flag} |"
+        )
+ 
+    # Clinical notes
+    if cn:
+        lines += ["\n## Clinical Notes\n"]
+        for note in cn:
+            lines.append(f"- {note}")
+ 
+    lines.append(f"\n_Extraction confidence: {conf:.0%}_")
+    return "\n".join(lines)
 
 # =========================
 # MODULE 2 CORE (EXTRACTION ONLY)
@@ -129,7 +238,7 @@ class ContextExtractionModule(dspy.Module):
 
     def forward(self, markdown_text: str):
 
-        if not markdown_text:
+        if not markdown_text or not markdown_text.strip():
             return self.empty()
 
         raw = self.model(markdown_text=markdown_text)
@@ -144,17 +253,29 @@ class ContextExtractionModule(dspy.Module):
             age=safe_str(pi.get("age")),
             gender=safe_str(pi.get("gender")),
             report_date=safe_str(pi.get("report_date")),
+            lab_name=safe_str(pi.get("lab_name")),
+            physician=safe_str(pi.get("physician"))
         )
         
         # -------------------------
         # METRICS CLEANING ONLY
         # -------------------------
-        metrics = []
+        raw_metrics = safe_json(raw.metrics, fallback=[])
+        metrics: list[dict] = []
         if isinstance(raw.metrics, list):
             for m in raw.metrics:
                 if isinstance(m, dict):
                     metrics.append(clean_metric(m))
 
+        # -------------------------
+        # Clinical Notes 
+        # -------------------------
+        raw_notes = safe_json(raw.clinical_notes, [])
+        notes: list[str] = []
+        if isinstance(raw_notes, list):
+            notes = [safe_str(n) for n in raw_notes if n]
+        elif isinstance(raw_notes, str) and raw_notes.strip():
+            notes = [raw_notes.strip()]
         # -------------------------
         # WRAP OUTPUT
         # -------------------------
@@ -162,129 +283,22 @@ class ContextExtractionModule(dspy.Module):
             report_category=safe_str(raw.report_category),
             personal_info=personal,
             metrics=[MedicalMetric(**m) for m in metrics],
+            clinical_notes=notes,
             confidence=compute_confidence(personal.model_dump(), metrics)
         )
 
         full = ctx.model_dump()
-
-        # -------------------------
-        # TOKEN-OPTIMIZED OUTPUT
-        # -------------------------
-        compressed = {
-            "rc": full["report_category"],
-            "data": [
-                {
-                    "t": m["test_name"],
-                    "v": m["value"]
-                }
-                for m in full["metrics"]
-            ],
-            "meta": {
-                "age": full["personal_info"]["age"],
-                "gender": full["personal_info"]["gender"]
-            },
-            "c": full["confidence"]
-        }
-
         return {
-            "full": full,
-            "compressed": compressed
+            "full": full, 
+            "compressed": compress(full)
         }
 
     def empty(self):
-        return {
-            "full": ExtractedContext(
-                personal_info=PersonalInfo(),
-                metrics=[],
-                confidence=0.0
-            ).model_dump(),
-            "compressed": {
-                "rc": "Unknown",
-                "data": [],
-                "meta": {"age": "Not found", "gender": "Not found"},
-                "c": 0.0
-            }
-        }
-
-
-# =========================
-# LANGGRAPH NODE
-# =========================
-
-def extraction_node(state: Dict[str, Any]):
-
-    if not dspy.settings.lm:
-        dspy.settings.configure(
-            lm=dspy.OpenAI(
-                model="openrouter/google/gemma-4-31b-it",
-                api_key="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", #os.getenv("OPENROUTER_API_KEY"),
-                api_base="https://openrouter.ai/api/v1",
-                temperature=0
-            )
+        empty_ctx = ExtractedContext(
+            personal_info=PersonalInfo()
         )
-
-    module = ContextExtractionModule()
-
-    return {
-        "module_2_output": module(state.get("md_file_content", ""))
-    }
-
-
-# =========================
-# SIMPLE TEST
-# =========================
-
-
-if __name__ == "__main__":
-
-    test = {
-        "md_file_content": """
-        ### *Patient Information*
-*   *Name:* Yashvi M. Patel
-*   *Age:* 21 Years
-*   *Sex:* Female
-*   *UHID:* 556
-*   *Registered on:* 02:31 PM 02 Dec, 2X
-*   *Collected on:* 03:11 PM 02 Dec, 2X
-*   *Reported on:* 04:32 PM 02 Dec, 2X
-*   *Sample Collected At:* 123, Shiram Complex, Ahmedabad, Mumbai
-*   *Sample Collected By:* Mr. Suresh
-*   *Ref. By:* Dr. Hiren Shah
-
----
-
-### *Complete Blood Count (CBC)*
-| Investigation | Result | Status | Reference Value | Unit |
-| :--- | :--- | :--- | :--- | :--- |
-| *Hemoglobin (Hb)* | 13.00 | Normal | 12.00 - 15.00 | g/dL |
-| *Total RBC count* | 4.80 | Normal | 3.80 - 4.80 | mill/cumm |
-| *BLOOD INDICES* | | | | |
-| Packed Cell Volume (PCV) | 40 | Normal | 36 - 46 | % |
-| Mean Corpuscular Volume (MCV) | 88 | Normal | 83 - 101 | fL |
-| MCH | 28 | Normal | 27 - 32 | pg |
-| MCHC | 32.50 | Normal | 31.50 - 34.50 | g/dL |
-| RDW | 13.50 | Normal | 11.60 - 14.00 | % |
-| *Total WBC count* | 6000 | Normal | 4000 - 11000 | cumm |
-| *DIFFERENTIAL WBC COUNT* | | | | |
-| Neutrophils | 60 | Normal | 50 - 70 | % |
-| Lymphocytes | 30 | Normal | 20 - 40 | % |
-| Eosinophils | 02 | Normal | 00 - 06 | % |
-| Monocytes | 05 | Normal | 02 - 10 | % |
-| Basophils | 01 | Normal | 00 - 02 | % |
-| *Platelet Count* | 250000 | Normal | 150000 - 410000 | cumm |
-
----
-
-*   *Instruments:* Fully automated cell counter - Mindray 300
-*   *Interpretation:* Further perform for Anemia.
-*   *Generated on:* 02 Dec, 202X 05:22 PM
-
-*Signatories:*
-*   Medical Lab Technician (DMLT, BMLT)
-*   Dr. Payal Shah (MD, Pathologist)
-*   Dr. Vimal Shah (MD, Pathologist)
-        """
-    }
-
-    import json
-    print(json.dumps(extraction_node(test), indent=2))
+        full = empty_ctx.model_dump()
+        return {
+            "full": full, 
+            "compressed": compress(full)
+        }
