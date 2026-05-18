@@ -21,26 +21,26 @@ PDF / Image
 ┌────────────────────────────────────────────────────────────┐
 │                   LangGraph AgentGraph                     │
 │                                                            │
-│  ┌──────────┐   ┌────────────┐   ┌──────────┐             │
+│  ┌──────────┐   ┌────────────┐   ┌──────────┐              │
 │  │ Module 1 │──▶│  Module 2  │──▶│ Module 3 │             │
-│  │ OCR +    │   │ Context    │   │ PubMed   │             │
-│  │ Clean    │   │ Extraction │   │ Search   │             │
-│  └──────────┘   └────────────┘   └──────────┘             │
+│  │ OCR +    │   │ Context    │   │ PubMed   │              │
+│  │ Clean    │   │ Extraction │   │ Search   │              │
+│  └──────────┘   └────────────┘   └──────────┘              │
 │       DSPy           DSPy             DSPy                 │
 │  ChainOfThought   ChainOfThought  ChainOfThought           │
 │                                        │                   │
 │                              ┌─────────▼──────────┐        │
-│                              │     Module 4        │        │
-│                              │  Report Generation  │        │
+│                              │     Module 4        │       │
+│                              │  Report Generation  │       │
 │                              └─────────┬──────────┘        │
 │                                        │                   │
 │                              ┌─────────▼──────────┐        │
-│                              │     Module 5        │        │
-│                              │  Quality Evaluation │        │
-│                              └─────────────────────┘        │
+│                              │     Module 5        │       │
+│                              │  Quality Evaluation │       │
+│                              └─────────────────────┘       │
 └────────────────────────────────────────────────────────────┘
                                         │
-                              ┌─────────▼──────────┐
+                              ┌─────────▼───────────┐
                               │  Personalized MD    │
                               │  Clinical Report    │
                               └─────────────────────┘
