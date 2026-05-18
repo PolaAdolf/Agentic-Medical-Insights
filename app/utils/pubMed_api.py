@@ -11,11 +11,8 @@ Public API
 - fetch_abstracts(pmids)            → list[dict]
 """
 
-from __future__ import annotations
-
 import os
 import time
-from typing import Optional
 
 from dotenv import load_dotenv
 from Bio import Entrez

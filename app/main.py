@@ -4,9 +4,6 @@ main.py
 FastAPI Entry Point # Agentic Medical Insights
 """
 
-from __future__ import annotations
-
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI

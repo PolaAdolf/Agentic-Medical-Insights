@@ -1,7 +1,6 @@
-import os
 import dspy
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Any
 import json
 from sympy import re
 

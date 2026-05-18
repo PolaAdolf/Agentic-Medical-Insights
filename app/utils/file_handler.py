@@ -4,7 +4,6 @@ from pathlib import Path
 import numpy as np
 import easyocr
 import fitz
-import pytesseract
 from PIL import Image
 
 def ocr_image(image: Image.Image) -> str:

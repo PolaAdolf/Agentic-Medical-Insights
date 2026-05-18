@@ -1,0 +1,44 @@
+# ============================================================
+# Agentic-Medical-Insights — requirements.txt
+# ============================================================
+
+dspy-ai>=2.5.0                  # DSPy signatures & modules (pip install dspy-ai)
+dspy>=3.2.0                     # DSPy core (pip install dspy)
+langgraph>=0.2.28               # Agent graph orchestration
+langchain-core>=0.3.0           # LangGraph dependency
+openai>=2.32.0                  # OpenAI API client
+openrouter>=0.9.1               # OpenRouter API client
+requests>=2.32.4                # Raw HTTP calls to OpenRouter API
+
+pytesseract>=0.3.13             # Python wrapper for Tesseract OCR
+Pillow>=11.3.0                  # Image loading, resizing, format conversion
+opencv-python>=4.13.0.92        # Image pre-processing: deskew, denoise, threshold
+numpy>=2.1.3                    # Array ops for OpenCV
+
+easyocr>=1.7.2                  # OCR fallback for complex layouts (pip install easyocr)
+easydict>=1.13                  # Dict subclass for attribute access (pip install easydict)
+
+PyMuPDF>=1.27.2.3               # Primary PDF parsing (text + layout)
+pdfplumber>=0.11.9              # Native text extraction from digital PDFs
+pdf2image>=1.17.0               # PDF → image for scanned pages (needs poppler)
+pypdf>=5.9.0                    # PDF metadata, fallback reader
+pypdfium2>=5.6.0                # Fast PDF rendering alternative
+
+biopython>=1.87                 # PubMed API client (Entrez)
+fastapi>=0.116.1                # REST API
+uvicorn>=0.35.0                 # ASGI server
+python-multipart>=0.0.28        # File upload support
+
+
+streamlit>=1.47.0               # Streamlit UI
+
+typing_extensions>=4.14.1       # TypedDict, Annotated for older Python
+python-dotenv>=1.1.1            # .env file loading (already listed above)
+
+pydantic>=2.11.7                # Data validation and settings management
+pydantic-settings>=2.10.1       # Pydantic settings management
+pydantic_core>=2.33.2           # Core Pydantic engine (required by pydantic 2.x)
+
+scipy>=1.15.3                   # Scientific computing (image ops)
+scikit-image>=0.25.2            # Advanced image processing
+imageio>=2.37.3                 # Extra image format support

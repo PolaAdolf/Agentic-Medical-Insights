@@ -34,7 +34,7 @@ def get_gemma_model(variant='26b', temp=0):
     )
 
 class OpenRouterLM(dspy.BaseLM):
-    def __init__(self, model="openai/gpt-oss-20b:free", temperature=0):
+    def __init__(self, model="google/gemma-4-26b-a4b-it:free", temperature=0):
         super().__init__(model=model)
         
         self.api_key = os.getenv("OPENROUTER_API_KEY")
